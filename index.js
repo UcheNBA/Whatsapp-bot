@@ -8,6 +8,11 @@ const fs = require("fs");
 const yts = require("yt-search");
 const path = require("path");
 const axios = require("axios");
+const express = require("express");
+
+const app = express();
+const port = process.env.PORT || 3000;
+const sessionPath = process.env.SESSION_PATH || "./.wwebjs_auth";
 
 const AXIOS_DEFAULTS = {
   timeout: 60000,
@@ -159,13 +164,16 @@ function saveQrPage(qrDataUrl) {
 }
 
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new LocalAuth({
+    dataPath: sessionPath
+  }),
   webVersion: '2.3000.1014734543',
   webVersionCache: {
     type: 'remote',
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
   },
   puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     headless: process.env.HEADLESS === "false" ? false : true,
     args: [
       "--no-sandbox",
@@ -2318,4 +2326,14 @@ async function checkAiProvider() {
   }
 }
 
+// Add a simple web server to view the QR code and keep the service alive
+app.get("/", (req, res) => {
+  if (fs.existsSync(qrHtmlPath)) {
+    res.sendFile(qrHtmlPath);
+  } else {
+    res.send("<h1>Bot is running</h1><p>If you need to scan a QR code, wait a few seconds and refresh.</p>");
+  }
+});
+
+app.listen(port, () => console.log(`Server running on port ${port}`));
 startClient();
