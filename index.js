@@ -11,7 +11,18 @@ const axios = require("axios");
 const express = require("express");
 
 const app = express();
-const port = process.env.PORT || 3000;
+let qrCodeData = 'Waiting for QR...';
+
+app.get('/', async (req, res) => {
+  if (qrCodeData === 'QR Ready! Scan below') {
+    const qrImage = await QRCode.toDataURL(qrCodeData);
+    res.send(`<h1>Scan WhatsApp QR</h1><img src="${qrImage}"/>`);
+  } else {
+    res.send(`<h1>${qrCodeData}</h1><p>Refresh in 10s...</p>`);
+  }
+});
+
+app.listen(process.env.PORT || 3000);
 const sessionPath = process.env.SESSION_PATH || "./.wwebjs_auth";
 
 const AXIOS_DEFAULTS = {
@@ -186,25 +197,9 @@ const client = new Client({
   },
 });
 
-client.on("qr", async (qr) => {
-  console.log("Scan this QR code with WhatsApp:");
-  qrcode.generate(qr, { small: true });
-
-  const qrDataUrl = await QRCode.toDataURL(qr, {
-    errorCorrectionLevel: "M",
-    margin: 2,
-    width: 360,
-  });
-
-  await QRCode.toFile(qrImagePath, qr, {
-    errorCorrectionLevel: "M",
-    margin: 2,
-    width: 360,
-  });
-  saveQrPage(qrDataUrl);
-
-  console.log(`QR image saved to: ${qrImagePath}`);
-  console.log(`Open this file to scan it: ${qrHtmlPath}`);
+client.on('qr', async qr => {
+  qrCodeData = qr; // This updates the webpage
+  console.log('QR generated - go to your Render URL to scan');
 });
 
 client.on("authenticated", () => {
@@ -215,8 +210,9 @@ client.on("auth_failure", (message) => {
   console.error("WhatsApp authentication failed:", message);
 });
 
-client.on("ready", () => {
-  console.log("WhatsApp bot is ready.");
+client.on('ready', () => {
+  qrCodeData = 'QR Ready! Scan below';
+  console.log('Bot is ready!');
 });
 
 client.on("disconnected", (reason) => {
@@ -2326,14 +2322,4 @@ async function checkAiProvider() {
   }
 }
 
-// Add a simple web server to view the QR code and keep the service alive
-app.get("/", (req, res) => {
-  if (fs.existsSync(qrHtmlPath)) {
-    res.sendFile(qrHtmlPath);
-  } else {
-    res.send("<h1>Bot is running</h1><p>If you need to scan a QR code, wait a few seconds and refresh.</p>");
-  }
-});
-
-app.listen(port, () => console.log(`Server running on port ${port}`));
 startClient();
