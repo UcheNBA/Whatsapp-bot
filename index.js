@@ -12,21 +12,19 @@ const express = require("express");
 const puppeteer = require('puppeteer');
 
 const app = express();
-let qrCodeData = 'Waiting for QR...';
+let qrCodeData = null;
 
 app.get('/', async (req, res) => {
-  if (qrCodeData === 'QR Ready! Scan below') {
+  if (qrCodeData) {
     const qrImage = await QRCode.toDataURL(qrCodeData);
-    res.send(`<h1>Scan WhatsApp QR</h1><img src="${qrImage}"/>`);
+    res.send(`<h2>Scan this QR with WhatsApp</h2><img src="${qrImage}"/><p>Refresh page if expired</p>`);
   } else {
-    res.send(`<h1>${qrCodeData}</h1><p>Refresh in 10s...</p>`);
+    res.send('<h2>WhatsApp Connected ✅</h2><p>Client is ready!</p>');
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 const sessionPath = process.env.SESSION_PATH || "./.wwebjs_auth";
 
 const AXIOS_DEFAULTS = {
@@ -182,19 +180,14 @@ const client = new Client({
   authStrategy: new LocalAuth({ dataPath: './session' }),
   puppeteer: {
     headless: 'new',
-    executablePath: puppeteer.executablePath(), // <-- This auto-finds Chrome
+    executablePath: puppeteer.executablePath(),
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  },
-  webVersion: '2.3000.1014734543',
-  webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
-  },
+  }
 });
 
-client.on('qr', async qr => {
-  qrCodeData = qr; // This updates the webpage
-  console.log('QR generated - go to your Render URL to scan');
+client.on('qr', async (qr) => {
+  qrCodeData = qr;
+  console.log('QR Code generated - open your .onrender.com URL to scan');
 });
 
 client.on("authenticated", () => {
@@ -206,8 +199,8 @@ client.on("auth_failure", (message) => {
 });
 
 client.on('ready', () => {
-  qrCodeData = 'QR Ready! Scan below';
-  console.log('Bot is ready!');
+  console.log('Client is ready!');
+  qrCodeData = null; // Clear QR after login
 });
 
 client.on("disconnected", (reason) => {
