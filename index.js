@@ -178,25 +178,16 @@ function saveQrPage(qrDataUrl) {
 }
 
 const client = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: sessionPath
-  }),
+  authStrategy: new LocalAuth({ dataPath: './session' }),
+  puppeteer: {
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    // NO executablePath here - let it auto-detect
+  },
   webVersion: '2.3000.1014734543',
   webVersionCache: {
     type: 'remote',
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
-  },
-  puppeteer: {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    headless: process.env.HEADLESS === "false" ? false : true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-extensions",
-      "--disable-gpu",
-    ],
-    timeout: 120000,
   },
 });
 
