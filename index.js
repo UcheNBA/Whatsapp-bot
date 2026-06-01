@@ -11,15 +11,6 @@ const axios = require("axios");
 const express = require("express");
 const puppeteer = require('puppeteer');
 
-const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: './session' }),
-    puppeteer: {
-        headless: 'new',
-        executablePath: puppeteer.executablePath(), // <-- This auto-finds Chrome
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    }
-})
-
 const app = express();
 let qrCodeData = 'Waiting for QR...';
 
