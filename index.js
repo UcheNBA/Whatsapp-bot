@@ -1,10 +1,12 @@
+const fs = require('fs');
+if (fs.existsSync('./session')) fs.rmSync('./session', { recursive: true, force: true });
+
 require("dotenv").config();
 
 const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const QRCode = require("qrcode");
 const OpenAI = require("openai");
-const fs = require("fs");
 const yts = require("yt-search");
 const path = require("path");
 const axios = require("axios");
@@ -181,7 +183,14 @@ const client = new Client({
   puppeteer: {
     headless: 'new',
     executablePath: puppeteer.executablePath(),
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--single-process',
+      '--no-zygote'
+    ]
   }
 });
 
