@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const sessionPath = path.join(__dirname, 'session');
 if (fs.existsSync(sessionPath)) {
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-    console.log('Deleted old session folder');
+  fs.rmSync(sessionPath, { recursive: true, force: true });
+  console.log('Deleted old session');
 }
 
 require("dotenv").config();
@@ -193,7 +193,8 @@ const client = new Client({
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--single-process',
-      '--no-zygote'
+      '--no-zygote',
+      '--memory-pressure-off'
     ]
   }
 });
@@ -207,8 +208,8 @@ client.on('disconnected', reason => {
 });
 
 client.on('qr', async (qr) => {
-  qrCodeData = qr;
-  console.log('QR Code generated - open your .onrender.com URL to scan');
+  qrCodeData = qr; // ADD THIS LINE
+  console.log('QR ready - scan now');
 });
 
 client.on("authenticated", () => {
@@ -216,8 +217,8 @@ client.on("authenticated", () => {
 });
 
 client.on('ready', () => {
-  console.log('Client is ready!');
-  qrCodeData = null; // Clear QR after login
+  qrCodeData = null; // ADD THIS LINE
+  console.log('Bot is ONLINE ✅');
 });
 
 client.on("loading_screen", (percent, message) => {
@@ -237,6 +238,13 @@ async function handleGracefulShutdown() {
 
 process.on("SIGINT", handleGracefulShutdown);
 process.on("SIGTERM", handleGracefulShutdown);
+
+client.on('message', async msg => {
+  console.log('Message received:', msg.body);
+  if (msg.body === '!ping') {
+    msg.reply('pong! Bot works ✅');
+  }
+});
 
 client.on("message", handleMessage);
 
