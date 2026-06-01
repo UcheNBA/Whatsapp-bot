@@ -1,5 +1,10 @@
 const fs = require('fs');
-if (fs.existsSync('./session')) fs.rmSync('./session', { recursive: true, force: true });
+const path = require('path');
+const sessionPath = path.join(__dirname, 'session');
+if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
+    console.log('Deleted old session folder');
+}
 
 require("dotenv").config();
 
@@ -8,7 +13,6 @@ const qrcode = require("qrcode-terminal");
 const QRCode = require("qrcode");
 const OpenAI = require("openai");
 const yts = require("yt-search");
-const path = require("path");
 const axios = require("axios");
 const express = require("express");
 const puppeteer = require('puppeteer');
@@ -194,6 +198,14 @@ const client = new Client({
   }
 });
 
+client.on('auth_failure', msg => {
+  console.log('Auth failed:', msg);
+});
+
+client.on('disconnected', reason => {
+  console.log('Client disconnected:', reason);
+});
+
 client.on('qr', async (qr) => {
   qrCodeData = qr;
   console.log('QR Code generated - open your .onrender.com URL to scan');
@@ -203,17 +215,9 @@ client.on("authenticated", () => {
   console.log("WhatsApp authenticated. Waiting for the bot to finish loading...");
 });
 
-client.on("auth_failure", (message) => {
-  console.error("WhatsApp authentication failed:", message);
-});
-
 client.on('ready', () => {
   console.log('Client is ready!');
   qrCodeData = null; // Clear QR after login
-});
-
-client.on("disconnected", (reason) => {
-  console.log("WhatsApp disconnected:", reason);
 });
 
 client.on("loading_screen", (percent, message) => {
