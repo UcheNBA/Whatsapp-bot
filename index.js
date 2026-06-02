@@ -1,12 +1,11 @@
+require("dotenv").config();
 const fs = require('fs');
 const path = require('path');
-const sessionPath = path.join(__dirname, 'session');
+const sessionPath = process.env.SESSION_PATH || path.join(__dirname, 'session');
 if (fs.existsSync(sessionPath)) {
   fs.rmSync(sessionPath, { recursive: true, force: true });
   console.log('Deleted old session');
 }
-
-require("dotenv").config();
 
 const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
@@ -31,7 +30,6 @@ app.get('/', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-const sessionPath = process.env.SESSION_PATH || "./.wwebjs_auth";
 
 const AXIOS_DEFAULTS = {
   timeout: 60000,
