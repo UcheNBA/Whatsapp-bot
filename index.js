@@ -70,8 +70,7 @@ const mathGames = new Map();
 const hangmanGames = new Map();
 const hlGames = new Map();
 const downloadSelections = new Map();
-const aiProvider = (process.env.AI_PROVIDER || "ollama").toLowerCase();
-const isOllamaProvider = aiProvider === "ollama";
+const aiProvider = (process.env.AI_PROVIDER || "openrouter").toLowerCase();
 const adminNumber = process.env.ADMIN_NUMBER || "";
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({
@@ -92,9 +91,6 @@ const openRouter = process.env.OPENROUTER_API_KEY
   : null;
 const openAiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const openRouterModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-const ollamaUrl = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
-const ollamaModel = process.env.OLLAMA_MODEL || "llama3.2:3b";
-const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS || 600000);
 const aiMaxTokens = Number(process.env.AI_MAX_TOKENS || 100);
 const lolHumanApiKey = process.env.LOL_HUMAN_API_KEY || "deb666d7ddce58404c68c1d0";
 const youtubeApiKey = process.env.YOUTUBE_API_KEY || "AIzaSyC6q6Um4WFgqd755Z5V-sYsuT93A5zrG2k";
@@ -104,9 +100,6 @@ let aiInstructions =
   `You're Carson, a 16-19 year old human. NOT a bot. Keep it SUPER short (1-2 sentences max). Use slang: u, rn, fr, ngl, lowkey, bet. Use 0-2 emojis like 😭, 😂, 💀, ✨, 🙏, 🔥. Sound chill and natural. NEVER say "As an AI" or apologize for being a bot. If u don't know something, say "idk lol" or "google it fr". Reply in ${targetLanguage}.`;
 
 console.log(`AI provider: ${aiProvider}`);
-if (aiProvider === "ollama") {
-  console.log(`Ollama model: ${ollamaModel}`);
-}
 if (aiProvider === "openrouter") {
   console.log(`OpenRouter model: ${openRouterModel}`);
 }
@@ -953,10 +946,7 @@ function getAiStatusText(chatId) {
     lines.push("Group mode: tag the bot to make AI reply.");
   }
 
-  if (isOllamaProvider) {
-    lines.push(`Ollama URL: ${ollamaUrl}`);
-    lines.push(`Ollama model: ${ollamaModel}`);
-  } else if (aiProvider === "openrouter") {
+  if (aiProvider === "openrouter") {
     lines.push(`OpenRouter model: ${openRouterModel}`);
   } else {
     lines.push(`OpenAI model: ${openAiModel}`);
@@ -1961,25 +1951,6 @@ async function replyWithAi(message, prompt) {
     console.error("AI reply failed:", error);
     const errorMessage = getErrorMessage(error);
 
-    if (isOllamaProvider && error.cause?.code === "ECONNREFUSED") {
-      await message.reply(
-        `Ollama is not running yet. Start Ollama, run \`ollama pull ${ollamaModel}\`, then restart this bot.`
-      );
-      return;
-    }
-
-    if (isOllamaProvider && isOllamaTimeoutError(error)) {
-      await message.reply(
-        "The local AI took too long to reply. Try a shorter question, use a smaller Ollama model, or increase OLLAMA_TIMEOUT_MS."
-      );
-      return;
-    }
-
-    if (isOllamaProvider && errorMessage.includes("model") && errorMessage.includes("not found")) {
-      await message.reply(`The local AI model is not downloaded yet. Run: ollama pull ${ollamaModel}`);
-      return;
-    }
-
     if (error.code === "insufficient_quota") {
       await message.reply("yo my ai ran out of money 😭 tell the boss");
       return;
@@ -2000,10 +1971,6 @@ async function replyWithAi(message, prompt) {
 }
 
 async function createAiReply(messages) {
-  if (aiProvider === "ollama") {
-    return createOllamaReply(messages);
-  }
-
   if (aiProvider === "openai") {
     return createOpenAiReply(messages);
   }
@@ -2013,92 +1980,6 @@ async function createAiReply(messages) {
   }
 
   throw new Error(`Unknown AI_PROVIDER: ${aiProvider}`);
-}
-
-async function createOllamaReply(messages) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ollamaTimeoutMs);
-
-  try {
-    const response = await fetch(`${ollamaUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: ollamaModel,
-        stream: true,
-        messages: [
-          {
-            role: "system",
-            content: aiInstructions,
-          },
-          ...messages,
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const details = await response.text();
-      throw new Error(`Ollama request failed (${response.status}): ${details}`);
-    }
-
-    return readOllamaStream(response);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function readOllamaStream(response) {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let answer = "";
-
-  for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const content = parseOllamaStreamLine(line);
-      if (content) {
-        answer += content;
-      }
-    }
-  }
-
-  buffer += decoder.decode();
-  if (buffer.trim()) {
-    const content = parseOllamaStreamLine(buffer);
-    if (content) {
-      answer += content;
-    }
-  }
-
-  return answer.trim() || "I could not make a reply this time.";
-}
-
-function parseOllamaStreamLine(line) {
-  const trimmed = line.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  const data = JSON.parse(trimmed);
-  if (data.error) {
-    throw new Error(data.error);
-  }
-
-  return data.message?.content || "";
-}
-
-function isOllamaTimeoutError(error) {
-  return (
-    error.name === "AbortError" ||
-    error.cause?.code === "UND_ERR_HEADERS_TIMEOUT" ||
-    error.cause?.code === "UND_ERR_BODY_TIMEOUT"
-  );
 }
 
 async function createOpenAiReply(messages) {
@@ -2216,7 +2097,6 @@ async function startClient(attempt = 1) {
   try {
     if (attempt === 1) {
       loadScores();
-      await checkAiProvider();
 
       // Try to clear any orphaned lock before the first attempt
       const lockPath = path.join(__dirname, ".wwebjs_auth", "session", "SingletonLock");
@@ -2273,59 +2153,6 @@ async function startClient(attempt = 1) {
     );
     await wait(3000);
     await startClient(attempt + 1);
-  }
-}
-
-async function checkAiProvider() {
-  if (!isOllamaProvider) {
-    if (aiProvider === "openrouter") {
-      if (!openRouter) {
-        console.log("OpenRouter is selected, but OPENROUTER_API_KEY is empty.");
-      } else {
-        console.log(`OpenRouter is selected with model ${openRouterModel}.`);
-      }
-
-      return;
-    }
-
-    if (!openai) {
-      console.log("OpenAI is selected, but OPENAI_API_KEY is empty.");
-    }
-
-    return;
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-
-  try {
-    const response = await fetch(`${ollamaUrl}/api/tags`, {
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.log(`Ollama check failed (${response.status}). The bot will still start.`);
-      return;
-    }
-
-    const data = await response.json();
-    const models = Array.isArray(data.models) ? data.models : [];
-    const hasModel = models.some(
-      (model) => model.name === ollamaModel || model.model === ollamaModel
-    );
-
-    if (hasModel) {
-      console.log(`Ollama is ready with model ${ollamaModel}.`);
-      return;
-    }
-
-    console.log(`Ollama is running, but ${ollamaModel} is not installed.`);
-    console.log(`Run: ollama pull ${ollamaModel}`);
-  } catch (error) {
-    console.log("Ollama is not reachable yet. The bot will still start.");
-    console.log(`Start Ollama and run: ollama pull ${ollamaModel}`);
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
