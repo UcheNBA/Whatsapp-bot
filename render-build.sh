@@ -8,4 +8,3 @@ npm install
 npx puppeteer install
 
 echo "Build process completed"
-npx puppeteer install

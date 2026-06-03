@@ -72,12 +72,6 @@ const hlGames = new Map();
 const downloadSelections = new Map();
 const aiProvider = (process.env.AI_PROVIDER || "openrouter").toLowerCase();
 const adminNumber = process.env.ADMIN_NUMBER || "";
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    timeout: Number(process.env.AI_TIMEOUT_MS) || 180000
-  })
-  : null;
 const openRouter = process.env.OPENROUTER_API_KEY
   ? new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
@@ -89,7 +83,6 @@ const openRouter = process.env.OPENROUTER_API_KEY
     },
   })
   : null;
-const openAiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const openRouterModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 const aiMaxTokens = Number(process.env.AI_MAX_TOKENS || 100);
 const lolHumanApiKey = process.env.LOL_HUMAN_API_KEY || "deb666d7ddce58404c68c1d0";
@@ -99,10 +92,8 @@ let aiInstructions =
   process.env.BOT_PERSONALITY ||
   `You're Carson, a 16-19 year old human. NOT a bot. Keep it SUPER short (1-2 sentences max). Use slang: u, rn, fr, ngl, lowkey, bet. Use 0-2 emojis like 😭, 😂, 💀, ✨, 🙏, 🔥. Sound chill and natural. NEVER say "As an AI" or apologize for being a bot. If u don't know something, say "idk lol" or "google it fr". Reply in ${targetLanguage}.`;
 
-console.log(`AI provider: ${aiProvider}`);
-if (aiProvider === "openrouter") {
-  console.log(`OpenRouter model: ${openRouterModel}`);
-}
+console.log(`AI Provider: OpenRouter`);
+console.log(`Model: ${openRouterModel}`);
 console.log("Starting WhatsApp client...");
 
 process.on("unhandledRejection", (reason) => {
@@ -938,19 +929,14 @@ function getAiStatusText(chatId) {
     isAiEnabled
       ? "AI chat is on globally."
       : "AI chat is off. Use !ask for one question, or send !ai on from the owner account.",
-    `Provider: ${aiProvider}`,
+    `Provider: OpenRouter`,
     `Language: ${targetLanguage}`,
   ];
 
   if (chatId.endsWith("@g.us")) {
     lines.push("Group mode: tag the bot to make AI reply.");
   }
-
-  if (aiProvider === "openrouter") {
-    lines.push(`OpenRouter model: ${openRouterModel}`);
-  } else {
-    lines.push(`OpenAI model: ${openAiModel}`);
-  }
+  lines.push(`OpenRouter model: ${openRouterModel}`);
 
   if (!adminNumber) {
     lines.push("Owner number is not set. Only messages sent from the linked WhatsApp account can use owner commands.");
@@ -1906,13 +1892,6 @@ function updateEnvValue(key, value) {
 }
 
 async function replyWithAi(message, prompt) {
-  if (aiProvider === "openai" && !openai) {
-    await message.reply(
-      "AI is not set up yet. Add your OPENAI_API_KEY in a .env file, then restart the bot."
-    );
-    return;
-  }
-
   if (aiProvider === "openrouter" && !openRouter) {
     await message.reply(
       "AI is not set up yet. Add your OPENROUTER_API_KEY in a .env file, then restart the bot."
@@ -1971,28 +1950,7 @@ async function replyWithAi(message, prompt) {
 }
 
 async function createAiReply(messages) {
-  if (aiProvider === "openai") {
-    return createOpenAiReply(messages);
-  }
-
-  if (aiProvider === "openrouter") {
-    return createOpenRouterReply(messages);
-  }
-
-  throw new Error(`Unknown AI_PROVIDER: ${aiProvider}`);
-}
-
-async function createOpenAiReply(messages) {
-  const response = await openai.chat.completions.create({
-    model: openAiModel,
-    messages: [
-      { role: "system", content: aiInstructions },
-      ...messages
-    ],
-    max_tokens: aiMaxTokens,
-  });
-
-  return response.choices[0]?.message?.content?.trim() || "I could not make a reply this time.";
+  return createOpenRouterReply(messages);
 }
 
 async function createOpenRouterReply(messages) {
