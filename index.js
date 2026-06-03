@@ -103,7 +103,10 @@ const client = new Client({
       '--disable-gpu',
       '--no-zygote',
       '--disable-extensions',
-      '--single-process'
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--password-store=basic'
     ]
   }
 });
@@ -1976,8 +1979,9 @@ async function startClient(attempt = 1) {
         console.log('[AUTH] Mode: QR Code');
       }
 
-      // Try to clear any orphaned lock before the first attempt
-      const lockPath = path.join(__dirname, ".wwebjs_auth", "session", "SingletonLock");
+      // Corrected lock path for LocalAuth with dataPath
+      // Structure: [sessionPath]/.wwebjs_auth/session/Default/SingletonLock
+      const lockPath = path.join(sessionPath, ".wwebjs_auth", "session", "Default", "SingletonLock");
       if (fs.existsSync(lockPath)) {
         try { fs.unlinkSync(lockPath); } catch (e) { /* ignore */ }
       }
