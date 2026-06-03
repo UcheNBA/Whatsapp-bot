@@ -100,7 +100,7 @@ const client = new Client({
       '--disable-gpu',
       '--no-zygote',
       '--disable-extensions',
-      '--disable-setuid-sandbox'
+      '--single-process'
     ]
   }
 });
@@ -1977,8 +1977,7 @@ async function startClient(attempt = 1) {
 
     if (!canRetry) {
       console.error("WhatsApp client failed to start:", error);
-      process.exitCode = 1;
-      return;
+      return; // Do NOT exit the process. Let the Express server continue running.
     }
 
     // Ensure previous browser instances are killed before clearing locks
