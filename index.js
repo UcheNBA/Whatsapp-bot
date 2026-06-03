@@ -108,7 +108,9 @@ const client = new Client({
       '--no-first-run',
       '--no-default-browser-check',
       '--password-store=basic',
-      '--js-flags="--max-old-space-size=350"',
+      '--js-flags="--max-old-space-size=300"', // Further reduced memory limit
+      '--disable-site-isolation-trials', // Disable site isolation for less memory usage
+      '--disable-features=site-per-process', // Disable site per process for less memory usage
       '--disable-web-security',
       '--aggressive-cache-discard'
     ]
@@ -127,11 +129,16 @@ client.on('qr', async (qr) => {
   const phoneNumber = (process.env.LINK_PHONE_NUMBER || "2348145929790").replace(/\D/g, '');
   qrCodeData = qr;
 
-  if (phoneNumber && !pairingCode && !isPairingInProgress) {
+  if (phoneNumber && !isPairingInProgress) {
+    // If a pairing code was previously generated but failed/expired, clear it to request a new one
+    if (pairingCode) {
+      console.log('[AUTH] Previous pairing code expired or failed. Requesting a new one.');
+      pairingCode = null;
+    }
     isPairingInProgress = true;
     try {
-      // Render Free tier needs a significant wait for Chromium to fully load the internal WhatsApp state
-      const waitTime = 30000;
+      // Render Free tier needs a very significant wait for Chromium to fully load the internal WhatsApp state
+      const waitTime = 45000; // Increased to 45 seconds
       console.log(`[AUTH] QR received. Waiting ${waitTime / 1000}s for browser state before requesting code...`);
       await wait(waitTime);
 
