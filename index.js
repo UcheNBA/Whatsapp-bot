@@ -2,11 +2,6 @@ require("dotenv").config();
 const fs = require('fs');
 const path = require('path');
 const sessionPath = process.env.SESSION_PATH || path.join(__dirname, 'session');
-if (fs.existsSync(sessionPath)) {
-  fs.rmSync(sessionPath, { recursive: true, force: true });
-  console.log('Deleted old session');
-}
-
 const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const QRCode = require("qrcode");
@@ -70,7 +65,6 @@ const mathGames = new Map();
 const hangmanGames = new Map();
 const hlGames = new Map();
 const downloadSelections = new Map();
-const aiProvider = (process.env.AI_PROVIDER || "openrouter").toLowerCase();
 const adminNumber = process.env.ADMIN_NUMBER || "";
 const openRouter = process.env.OPENROUTER_API_KEY
   ? new OpenAI({
@@ -92,7 +86,7 @@ let aiInstructions =
   process.env.BOT_PERSONALITY ||
   `You're Carson, a 16-19 year old human. NOT a bot. Keep it SUPER short (1-2 sentences max). Use slang: u, rn, fr, ngl, lowkey, bet. Use 0-2 emojis like 😭, 😂, 💀, ✨, 🙏, 🔥. Sound chill and natural. NEVER say "As an AI" or apologize for being a bot. If u don't know something, say "idk lol" or "google it fr". Reply in ${targetLanguage}.`;
 
-console.log(`AI Provider: OpenRouter`);
+console.log(`AI Provider: OpenRouter (Defaulted)`);
 console.log(`Model: ${openRouterModel}`);
 console.log("Starting WhatsApp client...");
 
@@ -252,7 +246,6 @@ async function handleMessage(message) {
     }
 
     isBotMuted = false;
-    updateEnvValue("BOT_MUTED", "false");
     await message.reply("i'm back on ✨ bet");
     return;
   }
@@ -265,8 +258,6 @@ async function handleMessage(message) {
 
     isBotMuted = true;
     isAiEnabled = false;
-    updateEnvValue("BOT_MUTED", "true");
-    updateEnvValue("AI_ENABLED", "false");
     await message.reply("bot is off rn. only owner commands work 🙏");
     return;
   }
@@ -593,7 +584,6 @@ async function handleMessage(message) {
     }
 
     targetLanguage = getCommandBody(originalText);
-    updateEnvValue("TARGET_LANGUAGE", targetLanguage);
     chatMemory.clear();
     await setBotPersonality(message, "default");
     return;
@@ -666,7 +656,6 @@ async function handleMessage(message) {
     }
 
     isAiEnabled = true;
-    updateEnvValue("AI_ENABLED", "true");
     await message.reply("ai is on now bet ✨");
     return;
   }
@@ -678,7 +667,6 @@ async function handleMessage(message) {
     }
 
     isAiEnabled = false;
-    updateEnvValue("AI_ENABLED", "false");
     chatMemory.delete(chatId);
     await message.reply("ai is off now i'm sleep 💤");
     return;
@@ -929,7 +917,7 @@ function getAiStatusText(chatId) {
     isAiEnabled
       ? "AI chat is on globally."
       : "AI chat is off. Use !ask for one question, or send !ai on from the owner account.",
-    `Provider: OpenRouter`,
+    `Provider: OpenRouter (Only)`,
     `Language: ${targetLanguage}`,
   ];
 
@@ -1874,25 +1862,11 @@ async function setBotPersonality(message, mode, customPersonality = "") {
   }
 
   chatMemory.clear();
-  updateEnvValue("BOT_PERSONALITY", aiInstructions);
   await message.reply(`Done. I will use that personality for future AI replies in ${targetLanguage}.`);
 }
 
-function updateEnvValue(key, value) {
-  const escapedValue = value.replace(/\r?\n/g, " ").trim();
-  const envText = fs.existsSync(path.join(__dirname, ".env")) ? fs.readFileSync(path.join(__dirname, ".env"), "utf8") : "";
-  const line = `${key}=${escapedValue}`;
-  const pattern = new RegExp(`^${key}=.*$`, "m");
-
-  const nextText = pattern.test(envText)
-    ? envText.replace(pattern, line)
-    : `${envText.trimEnd()}\n${line}\n`;
-
-  fs.writeFileSync(path.join(__dirname, ".env"), nextText);
-}
-
 async function replyWithAi(message, prompt) {
-  if (aiProvider === "openrouter" && !openRouter) {
+  if (!openRouter) {
     await message.reply(
       "AI is not set up yet. Add your OPENROUTER_API_KEY in a .env file, then restart the bot."
     );
