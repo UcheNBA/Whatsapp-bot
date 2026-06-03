@@ -14,6 +14,7 @@ const puppeteer = require('puppeteer');
 const app = express();
 let qrCodeData = null;
 let pairingCode = null;
+let isPairingInProgress = false;
 
 app.get('/', async (req, res) => {
   if (pairingCode) {
@@ -108,7 +109,6 @@ const client = new Client({
       '--no-default-browser-check',
       '--password-store=basic',
       '--js-flags="--max-old-space-size=350"',
-      '--disable-setuid-sandbox',
       '--disable-web-security',
       '--aggressive-cache-discard'
     ]
@@ -127,16 +127,20 @@ client.on('qr', async (qr) => {
   const phoneNumber = (process.env.LINK_PHONE_NUMBER || "2348145929790").replace(/\D/g, '');
   qrCodeData = qr;
 
-  if (phoneNumber && !pairingCode) {
+  if (phoneNumber && !pairingCode && !isPairingInProgress) {
+    isPairingInProgress = true;
     try {
-      // Increased wait for Render Free Tier to avoid the "t" error
-      await wait(10000);
+      // Render Free tier needs a significant wait for Chromium to fully load the internal WhatsApp state
+      const waitTime = 30000;
+      console.log(`[AUTH] QR received. Waiting ${waitTime / 1000}s for browser state before requesting code...`);
+      await wait(waitTime);
 
-      console.log(`[AUTH] Requesting pairing code for ${phoneNumber}...`);
+      console.log(`[AUTH] Requesting pairing code for: ${phoneNumber}`);
       pairingCode = await client.requestPairingCode(phoneNumber);
       console.log(`\n--- PAIRING CODE FOR ${phoneNumber} ---\n   ${pairingCode}\n-----------------------------------\n`);
     } catch (err) {
       console.error('[AUTH] Failed to get pairing code:', err.message || err);
+      isPairingInProgress = false; // Reset to allow another attempt on next QR cycle
       // Fallback to generating QR in logs if pairing fails
       qrcode.generate(qr, { small: true });
     }
@@ -153,6 +157,7 @@ client.on("authenticated", () => {
 client.on('ready', () => {
   qrCodeData = null;
   pairingCode = null;
+  isPairingInProgress = false;
   console.log('Bot is ONLINE ✅');
 });
 
