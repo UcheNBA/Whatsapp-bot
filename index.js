@@ -2,13 +2,13 @@ require("dotenv").config();
 const fs = require('fs');
 const path = require('path');
 const sessionPath = process.env.SESSION_PATH || path.join(__dirname, 'session');
-const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
-const QRCode = require("qrcode");
-const OpenAI = require("openai");
-const yts = require("yt-search");
-const axios = require("axios");
-const express = require("express");
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
+const OpenAI = require('openai');
+const yts = require('yt-search');
+const axios = require('axios');
+const express = require('express');
 const puppeteer = require('puppeteer');
 
 const app = express();
@@ -49,8 +49,6 @@ async function tryRequest(getter, attempts = 3) {
   throw lastError;
 }
 
-const qrImagePath = path.join(__dirname, "whatsapp-qr.png");
-const qrHtmlPath = path.join(__dirname, "whatsapp-qr.html");
 const scoresFilePath = path.join(__dirname, "scores.json");
 const maxStartupRetries = Number(process.env.STARTUP_RETRIES || 3);
 let isAiEnabled = process.env.AI_ENABLED === "true";
@@ -86,91 +84,23 @@ let aiInstructions =
   process.env.BOT_PERSONALITY ||
   `You're Carson, a 16-19 year old human. NOT a bot. Keep it SUPER short (1-2 sentences max). Use slang: u, rn, fr, ngl, lowkey, bet. Use 0-2 emojis like 😭, 😂, 💀, ✨, 🙏, 🔥. Sound chill and natural. NEVER say "As an AI" or apologize for being a bot. If u don't know something, say "idk lol" or "google it fr". Reply in ${targetLanguage}.`;
 
-console.log(`AI Provider: OpenRouter (Defaulted)`);
+console.log(`AI Provider: OpenRouter (Only)`);
 console.log(`Model: ${openRouterModel}`);
 console.log("Starting WhatsApp client...");
 
-process.on("unhandledRejection", (reason) => {
-  const message = getErrorMessage(reason);
-  console.error("Unhandled async error:", reason);
-
-  if (message.includes("auth timeout")) {
-    console.error(
-      "WhatsApp authentication timed out. Restart the bot and scan the QR code as soon as it appears."
-    );
-    process.exit(1);
-    return;
-  }
-  console.warn("Continuing operation despite unhandled rejection...");
-});
-
-function saveQrPage(qrDataUrl) {
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WhatsApp Bot QR</title>
-  <style>
-    body {
-      align-items: center;
-      background: #f4f6f8;
-      color: #111827;
-      display: flex;
-      font-family: Arial, sans-serif;
-      justify-content: center;
-      margin: 0;
-      min-height: 100vh;
-      padding: 24px;
-    }
-
-    main {
-      background: white;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      box-shadow: 0 16px 40px rgba(17, 24, 39, 0.12);
-      padding: 24px;
-      text-align: center;
-    }
-
-    img {
-      display: block;
-      height: min(78vw, 360px);
-      image-rendering: pixelated;
-      margin: 0 auto;
-      width: min(78vw, 360px);
-    }
-
-    p {
-      margin: 16px 0 0;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <img src="${qrDataUrl}" alt="WhatsApp login QR code">
-    <p>Open WhatsApp, go to Linked Devices, then scan this code.</p>
-  </main>
-</body>
-</html>
-`;
-
-  fs.writeFileSync(qrHtmlPath, html);
-}
-
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: './session' }),
+  authStrategy: new LocalAuth({ dataPath: sessionPath }),
   puppeteer: {
-    headless: 'new',
+    headless: true,
     executablePath: puppeteer.executablePath(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--single-process',
       '--no-zygote',
-      '--memory-pressure-off'
+      '--disable-extensions',
+      '--disable-setuid-sandbox'
     ]
   }
 });
@@ -184,8 +114,9 @@ client.on('disconnected', reason => {
 });
 
 client.on('qr', async (qr) => {
-  qrCodeData = qr; // ADD THIS LINE
-  console.log('QR ready - scan now');
+  qrCodeData = qr;
+  console.log('QR ready - Scan the code below in your Render logs:');
+  qrcode.generate(qr, { small: true });
 });
 
 client.on("authenticated", () => {
@@ -193,7 +124,7 @@ client.on("authenticated", () => {
 });
 
 client.on('ready', () => {
-  qrCodeData = null; // ADD THIS LINE
+  qrCodeData = null;
   console.log('Bot is ONLINE ✅');
 });
 
@@ -215,17 +146,11 @@ async function handleGracefulShutdown() {
 process.on("SIGINT", handleGracefulShutdown);
 process.on("SIGTERM", handleGracefulShutdown);
 
-client.on('message', async msg => {
-  console.log('Message received:', msg.body);
-  if (msg.body === '!ping') {
-    msg.reply('pong! Bot works ✅');
-  }
-});
-
-client.on("message", handleMessage);
-
 client.on("message_create", async (message) => {
-  if (message.fromMe) {
+  // Consolidate handlers: process messages from others AND self-created commands
+  if (message.fromMe && message.body.startsWith("!")) {
+    await handleMessage(message);
+  } else if (!message.fromMe) {
     await handleMessage(message);
   }
 });
@@ -258,8 +183,6 @@ async function handleMessage(message) {
 
     isBotMuted = true;
     isAiEnabled = false;
-    await message.reply("bot is off rn. only owner commands work 🙏");
-    return;
   }
 
   // 2. Global Mute Check: If muted, ignore non-admins immediately
@@ -584,9 +507,6 @@ async function handleMessage(message) {
     }
 
     targetLanguage = getCommandBody(originalText);
-    chatMemory.clear();
-    await setBotPersonality(message, "default");
-    return;
   }
 
   if (text.startsWith("!video ")) {
@@ -917,7 +837,7 @@ function getAiStatusText(chatId) {
     isAiEnabled
       ? "AI chat is on globally."
       : "AI chat is off. Use !ask for one question, or send !ai on from the owner account.",
-    `Provider: OpenRouter (Only)`,
+    `Provider: OpenRouter`,
     `Language: ${targetLanguage}`,
   ];
 
