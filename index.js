@@ -130,7 +130,7 @@ client.on('qr', async (qr) => {
     } catch (err) {
       console.error('Failed to get pairing code, falling back to QR:', err);
     }
-  } else if (!phoneNumber || !pairingCode) {
+  } else {
     console.log('QR ready - Scan the code below:');
     qrcode.generate(qr, { small: true });
   }
