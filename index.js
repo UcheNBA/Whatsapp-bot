@@ -13,9 +13,12 @@ const puppeteer = require('puppeteer');
 
 const app = express();
 let qrCodeData = null;
+let pairingCode = null;
 
 app.get('/', async (req, res) => {
-  if (qrCodeData) {
+  if (pairingCode) {
+    res.send(`<h2>Your Pairing Code:</h2><h1 style="font-family: monospace; font-size: 3rem; background: #f0f0f0; padding: 10px; display: inline-block;">${pairingCode}</h1><p>Enter this on your phone: Settings > Linked Devices > Link with phone number instead</p>`);
+  } else if (qrCodeData) {
     const qrImage = await QRCode.toDataURL(qrCodeData);
     res.send(`<h2>Scan this QR with WhatsApp</h2><img src="${qrImage}"/><p>Refresh page if expired</p>`);
   } else {
@@ -114,9 +117,23 @@ client.on('disconnected', reason => {
 });
 
 client.on('qr', async (qr) => {
+  const phoneNumber = process.env.LINK_PHONE_NUMBER;
   qrCodeData = qr;
-  console.log('QR ready - Scan the code below in your Render logs:');
-  qrcode.generate(qr, { small: true });
+
+  if (phoneNumber && !pairingCode) {
+    try {
+      // International format without +
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      console.log(`Requesting pairing code for: ${cleanNumber}...`);
+      pairingCode = await client.requestPairingCode(cleanNumber);
+      console.log(`\n--- PAIRING CODE FOR ${cleanNumber} ---\n${pairingCode}\n-----------------------------------\n`);
+    } catch (err) {
+      console.error('Failed to get pairing code, falling back to QR:', err);
+    }
+  } else if (!phoneNumber || !pairingCode) {
+    console.log('QR ready - Scan the code below:');
+    qrcode.generate(qr, { small: true });
+  }
 });
 
 client.on("authenticated", () => {
@@ -125,6 +142,7 @@ client.on("authenticated", () => {
 
 client.on('ready', () => {
   qrCodeData = null;
+  pairingCode = null;
   console.log('Bot is ONLINE ✅');
 });
 
