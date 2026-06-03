@@ -106,7 +106,11 @@ const client = new Client({
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-default-browser-check',
-      '--password-store=basic'
+      '--password-store=basic',
+      '--js-flags="--max-old-space-size=350"',
+      '--disable-setuid-sandbox',
+      '--disable-web-security',
+      '--aggressive-cache-discard'
     ]
   }
 });
@@ -120,21 +124,23 @@ client.on('disconnected', reason => {
 });
 
 client.on('qr', async (qr) => {
-  const phoneNumber = process.env.LINK_PHONE_NUMBER || "2348145929790";
+  const phoneNumber = (process.env.LINK_PHONE_NUMBER || "2348145929790").replace(/\D/g, '');
   qrCodeData = qr;
 
-  if (phoneNumber) {
+  if (phoneNumber && !pairingCode) {
     try {
-      // International format without +
-      const cleanNumber = phoneNumber.replace(/\D/g, '');
-      console.log(`[AUTH] Requesting pairing code for ${cleanNumber}...`);
-      pairingCode = await client.requestPairingCode(cleanNumber);
-      console.log(`\n--- PAIRING CODE FOR ${cleanNumber} ---\n   ${pairingCode}\n-----------------------------------\n`);
+      // Increased wait for Render Free Tier to avoid the "t" error
+      await wait(10000);
+
+      console.log(`[AUTH] Requesting pairing code for ${phoneNumber}...`);
+      pairingCode = await client.requestPairingCode(phoneNumber);
+      console.log(`\n--- PAIRING CODE FOR ${phoneNumber} ---\n   ${pairingCode}\n-----------------------------------\n`);
     } catch (err) {
-      console.error('[AUTH] Failed to get pairing code:', err.message);
+      console.error('[AUTH] Failed to get pairing code:', err.message || err);
+      // Fallback to generating QR in logs if pairing fails
       qrcode.generate(qr, { small: true });
     }
-  } else {
+  } else if (!phoneNumber) {
     console.log('[AUTH] QR ready - Scan below:');
     qrcode.generate(qr, { small: true });
   }
@@ -1972,19 +1978,21 @@ async function startClient(attempt = 1) {
     if (attempt === 1) {
       loadScores();
 
-      const linkNum = process.env.LINK_PHONE_NUMBER || "2348145929790";
-      if (linkNum) {
-        console.log(`[AUTH] Mode: Pairing Code (${linkNum})`);
-      } else {
-        console.log('[AUTH] Mode: QR Code');
-      }
+      const linkNum = (process.env.LINK_PHONE_NUMBER || "2348145929790").replace(/\D/g, '');
+      console.log(`[AUTH] Mode: ${linkNum ? `Pairing Code (${linkNum})` : 'QR Code'}`);
 
-      // Corrected lock path for LocalAuth with dataPath
-      // Structure: [sessionPath]/.wwebjs_auth/session/Default/SingletonLock
-      const lockPath = path.join(sessionPath, ".wwebjs_auth", "session", "Default", "SingletonLock");
-      if (fs.existsSync(lockPath)) {
-        try { fs.unlinkSync(lockPath); } catch (e) { /* ignore */ }
-      }
+      // Robust lock cleanup for various potential structures
+      const lockFiles = [
+        path.join(sessionPath, ".wwebjs_auth", "session", "Default", "SingletonLock"),
+        path.join(sessionPath, ".wwebjs_auth", "session", "SingletonLock"),
+        path.join(__dirname, ".wwebjs_auth", "session", "SingletonLock")
+      ];
+
+      lockFiles.forEach(lf => {
+        if (fs.existsSync(lf)) {
+          try { fs.unlinkSync(lf); console.log(`[SYSTEM] Cleaned lock: ${lf}`); } catch (e) { }
+        }
+      });
     }
 
     await client.initialize();
@@ -2017,15 +2025,14 @@ async function startClient(attempt = 1) {
 
     // If the browser is locked, attempt to clear the lock file before retrying
     if (errorMessage.includes("browser is already running")) {
-      const lockPath = path.join(__dirname, ".wwebjs_auth", "session", "SingletonLock");
-      try {
-        if (fs.existsSync(lockPath)) {
-          console.log("Force-clearing session lock file...");
+      const lockPath = path.join(sessionPath, ".wwebjs_auth", "session", "Default", "SingletonLock");
+      if (fs.existsSync(lockPath)) {
+        try {
+          console.log("[SYSTEM] Force-clearing session lock file...");
           fs.unlinkSync(lockPath);
+        } catch (err) {
+          console.error("CRITICAL ERROR: Could not clear session lock.");
         }
-      } catch (err) {
-        console.error("\x1b[31m%s\x1b[0m", "CRITICAL ERROR: Could not clear the session lock.");
-        console.error("A Chrome process is still running. Please open Task Manager and end all 'Google Chrome' or 'Chromium' tasks.");
       }
     }
 
