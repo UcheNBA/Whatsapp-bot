@@ -117,21 +117,22 @@ client.on('disconnected', reason => {
 });
 
 client.on('qr', async (qr) => {
-  const phoneNumber = process.env.LINK_PHONE_NUMBER;
+  const phoneNumber = process.env.LINK_PHONE_NUMBER || "2348145929790";
   qrCodeData = qr;
 
-  if (phoneNumber && !pairingCode) {
+  if (phoneNumber) {
     try {
       // International format without +
       const cleanNumber = phoneNumber.replace(/\D/g, '');
-      console.log(`Requesting pairing code for: ${cleanNumber}...`);
+      console.log(`[AUTH] Requesting pairing code for ${cleanNumber}...`);
       pairingCode = await client.requestPairingCode(cleanNumber);
-      console.log(`\n--- PAIRING CODE FOR ${cleanNumber} ---\n${pairingCode}\n-----------------------------------\n`);
+      console.log(`\n--- PAIRING CODE FOR ${cleanNumber} ---\n   ${pairingCode}\n-----------------------------------\n`);
     } catch (err) {
-      console.error('Failed to get pairing code, falling back to QR:', err);
+      console.error('[AUTH] Failed to get pairing code:', err.message);
+      qrcode.generate(qr, { small: true });
     }
   } else {
-    console.log('QR ready - Scan the code below:');
+    console.log('[AUTH] QR ready - Scan below:');
     qrcode.generate(qr, { small: true });
   }
 });
@@ -1967,6 +1968,13 @@ async function startClient(attempt = 1) {
   try {
     if (attempt === 1) {
       loadScores();
+
+      const linkNum = process.env.LINK_PHONE_NUMBER || "2348145929790";
+      if (linkNum) {
+        console.log(`[AUTH] Mode: Pairing Code (${linkNum})`);
+      } else {
+        console.log('[AUTH] Mode: QR Code');
+      }
 
       // Try to clear any orphaned lock before the first attempt
       const lockPath = path.join(__dirname, ".wwebjs_auth", "session", "SingletonLock");
