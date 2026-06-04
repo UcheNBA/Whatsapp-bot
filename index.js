@@ -108,12 +108,13 @@ const client = new Client({
       '--no-first-run',
       '--no-default-browser-check',
       '--password-store=basic',
-      '--js-flags="--max-old-space-size=400"', // Increased slightly to prevent crashes
-      '--disable-site-isolation-trials', // Disable site isolation for less memory usage
-      '--disable-features=site-per-process', // Disable site per process for less memory usage
-      '--disable-extensions',
+      '--js-flags="--max-old-space-size=300"', // Strict memory limit for Render Free
+      '--disable-site-isolation-trials',
+      '--disable-features=site-per-process',
       '--disable-component-update',
       '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
       '--disable-sync',
       '--disable-web-security',
       '--aggressive-cache-discard'
@@ -134,26 +135,32 @@ client.on('qr', async (qr) => {
   qrCodeData = qr;
 
   if (phoneNumber && !isPairingInProgress) {
-    // If a pairing code was previously generated but failed/expired, clear it to request a new one
-    if (pairingCode) {
-      console.log('[AUTH] Previous pairing code expired or failed. Requesting a new one.');
-      pairingCode = null;
-    }
     isPairingInProgress = true;
     try {
-      // Render Free tier needs a very significant wait for Chromium to fully load the internal WhatsApp state
-      const waitTime = 45000; // Increased to 45 seconds
-      console.log(`[AUTH] QR received. Waiting ${waitTime / 1000}s for browser state before requesting code...`);
+      // Render Free Tier is extremely slow. We must wait at least 60s.
+      const waitTime = 60000;
+      console.log(`[AUTH] QR received. Waiting ${waitTime / 1000}s for WhatsApp modules to initialize...`);
       await wait(waitTime);
 
       console.log(`[AUTH] Requesting pairing code for: ${phoneNumber}`);
-      pairingCode = await client.requestPairingCode(phoneNumber);
+      // Use a timeout to prevent the process from hanging if request fails
+      pairingCode = await withTimeout(client.requestPairingCode(phoneNumber), 30000, 'Pairing Request Timeout');
+
       console.log(`\n--- PAIRING CODE FOR ${phoneNumber} ---\n   ${pairingCode}\n-----------------------------------\n`);
+
+      // Once we have a code, we stop trying to pair until the next restart/fail
+      isPairingInProgress = true;
     } catch (err) {
-      console.error('[AUTH] Failed to get pairing code:', err.message || err);
-      isPairingInProgress = false; // Reset to allow another attempt on next QR cycle
-      // Fallback to generating QR in logs if pairing fails
-      qrcode.generate(qr, { small: true });
+      const errorMsg = err.message || err;
+      console.error('[AUTH] Failed to get pairing code:', errorMsg);
+
+      // If we get the 't' error, the browser isn't ready. We reset and wait for the next QR cycle.
+      isPairingInProgress = false;
+      pairingCode = null;
+
+      if (errorMsg !== 't') {
+        qrcode.generate(qr, { small: true });
+      }
     }
   } else if (!phoneNumber) {
     console.log('[AUTH] QR ready - Scan below:');
