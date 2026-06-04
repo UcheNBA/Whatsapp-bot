@@ -108,9 +108,13 @@ const client = new Client({
       '--no-first-run',
       '--no-default-browser-check',
       '--password-store=basic',
-      '--js-flags="--max-old-space-size=300"', // Further reduced memory limit
+      '--js-flags="--max-old-space-size=400"', // Increased slightly to prevent crashes
       '--disable-site-isolation-trials', // Disable site isolation for less memory usage
       '--disable-features=site-per-process', // Disable site per process for less memory usage
+      '--disable-extensions',
+      '--disable-component-update',
+      '--disable-background-networking',
+      '--disable-sync',
       '--disable-web-security',
       '--aggressive-cache-discard'
     ]
@@ -1977,6 +1981,19 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Helper function to add a timeout to any Promise
+function withTimeout(promise, ms, timeoutMessage = 'Operation timed out') {
+  let timeout = new Promise((resolve, reject) => {
+    let id = setTimeout(() => {
+      clearTimeout(id);
+      reject(new Error(timeoutMessage));
+    }, ms);
+  });
+  return Promise.race([
+    promise,
+    timeout
+  ]);
+}
 function getErrorMessage(error) {
   if (typeof error === "string") {
     return error;
